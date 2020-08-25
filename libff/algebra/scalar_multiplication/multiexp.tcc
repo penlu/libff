@@ -399,19 +399,37 @@ T multi_exp_inner(
     return opt_result;
 }
 
+template<typename T, typename FieldT, multi_exp_method Method,
+    typename std::enable_if<(Method == multi_exp_method_cuda), int>::type = 0>
+T multi_exp_inner(
+    typename std::vector<T>::const_iterator vec_start,
+    typename std::vector<T>::const_iterator vec_end,
+    typename std::vector<FieldT>::const_iterator scalar_start,
+    typename std::vector<FieldT>::const_iterator scalar_end);
+
 template<typename T, typename FieldT, multi_exp_method Method>
 T multi_exp(typename std::vector<T>::const_iterator vec_start,
             typename std::vector<T>::const_iterator vec_end,
             typename std::vector<FieldT>::const_iterator scalar_start,
             typename std::vector<FieldT>::const_iterator scalar_end,
-            const size_t chunks)
+            size_t chunks)
 {
     const size_t total = vec_end - vec_start;
+
+    if (Method == multi_exp_method_cuda) {
+        chunks = 1;
+    }
+
+    libff::enter_block("multi_exp invocation", false);
+
+    libff::print_indent(); printf("* multi_exp vector length: %zu\n", total);
     if ((total < chunks) || (chunks == 1))
     {
         // no need to split into "chunks", can call implementation directly
-        return multi_exp_inner<T, FieldT, Method>(
+        T final = multi_exp_inner<T, FieldT, Method>(
             vec_start, vec_end, scalar_start, scalar_end);
+        libff::leave_block("multi_exp invocation", false);
+        return final;
     }
 
     const size_t one = total/chunks;
@@ -436,6 +454,8 @@ T multi_exp(typename std::vector<T>::const_iterator vec_start,
     {
         final = final + partial[i];
     }
+
+    libff::leave_block("multi_exp invocation", false);
 
     return final;
 }
